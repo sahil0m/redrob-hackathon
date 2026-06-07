@@ -63,6 +63,17 @@ SYSTEM_EVIDENCE_TERMS = (
     "semantic search", "vector search", "embedding", "personalization",
     "information retrieval", "learning to rank", "matching system", "feed ranking",
 )
+# Supporting evidence: real applied-ML / production / evaluation work that the JD
+# values ("shipped to real users", "production deployment", "A/B testing") but
+# that isn't itself a ranking/retrieval system. Calibrated against the pool:
+# "data pipeline" (~4.3k), "production" (~2.8k), "ml model" (~1.5k),
+# "a/b test" (~1.4k) are common among relevant candidates, so they count as
+# *supporting* signal at lower weight, never as the bullseye.
+SUPPORTING_EVIDENCE_TERMS = (
+    "production", "deployed", "real users", "at scale", "ml model", "machine learning",
+    "model training", "a/b test", "ab test", "predictive model", "feature pipeline",
+    "data pipeline", "deep learning", "neural network", "nlp", "scoring model",
+)
 # JD "Things you absolutely need": embeddings retrieval, vector DBs / hybrid
 # search, evaluation frameworks for ranking.
 RETRIEVAL_TECH_TERMS = (
