@@ -23,6 +23,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterator
 
+# Cap on words fed to the embedder. ~256 words ≈ within e5's 512-token window
+# while front-loading title/summary/recent roles (the JD-decisive content).
+DENSE_WORD_CAP = 256
+
 
 def _open_maybe_gzip(path: str | Path):
     path = Path(path)
@@ -118,20 +122,37 @@ def build_view(raw: dict) -> CandidateView:
 
     # Dense text: human-readable, in the order a recruiter would read it. The
     # career descriptions carry the strongest "what did they actually build"
-    # signal, so they go in full.
-    career_descs = " ".join(str(_safe(j, "description", "")) for j in career)
+    # signal. We front-load the most JD-relevant content (title, summary, the two
+    # most recent roles) and cap the total to ~DENSE_WORD_CAP words: e5 truncates
+    # at 512 tokens anyway, so an unbounded blob just gets cut arbitrarily by the
+    # tokenizer. Front-loading keeps the decisive signal inside the window AND
+    # roughly halves embedding time on CPU (measured).
     career_titles = " ".join(str(_safe(j, "title", "")) for j in career)
     skill_names = ", ".join(str(_safe(s, "name", "")) for s in skills)
+    # Most recent roles first (career_history is chronological; current role has
+    # is_current=True). Sort current-first, then by start_date desc if present.
+    ordered = sorted(
+        career,
+        key=lambda j: (bool(j.get("is_current")), str(j.get("start_date", ""))),
+        reverse=True,
+    )
+    recent_descs = " ".join(str(_safe(j, "description", "")) for j in ordered[:3])
     dense_parts = [
         f"Title: {title}.",
         f"Headline: {headline}.",
         f"Summary: {summary}",
         f"Experience: {_safe(p, 'years_of_experience', 0)} years.",
         f"Past roles: {career_titles}.",
-        f"What they built: {career_descs}",
+        f"What they built: {recent_descs}",
         f"Skills: {skill_names}.",
     ]
     dense_text = " ".join(dense_parts)
+    # Hard word cap to bound tokenizer work and keep the JD-relevant head.
+    words = dense_text.split()
+    if len(words) > DENSE_WORD_CAP:
+        dense_text = " ".join(words[:DENSE_WORD_CAP])
+    # full career text retained for the sparse/lexical side (BM25 wants it all)
+    career_descs = " ".join(str(_safe(j, "description", "")) for j in career)
 
     # Sparse text: same content, lowercased, no field labels — BM25 wants raw
     # term frequencies.
