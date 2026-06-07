@@ -1,0 +1,24 @@
+# Redrob candidate ranker — pinned dependencies.
+#
+# CPU-only by design (the spec forbids GPU at rank time). For a clean CPU
+# install of torch, use the CPU wheel index:
+#   pip install torch==2.3.1 --index-url https://download.pytorch.org/whl/cpu
+#   pip install -r requirements.txt
+#
+# The versions below are the ones the submission was developed and tested
+# against. sentence-transformers pulls torch + transformers transitively; we pin
+# them so Stage-3 reproduction is deterministic.
+
+numpy==2.1.2
+pandas==2.3.3
+scipy==1.16.3
+scikit-learn==1.7.2
+xgboost==3.2.0
+sentence-transformers==5.1.2
+transformers==4.57.1
+rank-bm25==0.2.2
+PyYAML>=6.0
+tqdm>=4.66
+
+# torch: install the CPU build separately (see header). Pinned for reference:
+# torch==2.3.1   (CPU wheel)
