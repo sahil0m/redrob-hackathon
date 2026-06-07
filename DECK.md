@@ -46,23 +46,35 @@ LangChain-only "AI experience."
 
 ---
 
-## Architecture
+## Architecture — explicit two-stage retrieval
+
+Like every real production ranker, we separate **recall** from **precision**.
+(A leave-one-out ablation proved why: inside the top-100, `role_fit` is 1.0 for
+everyone — it decides *entry*, not *order*.)
 
 ```
 candidates.jsonl
   → data         stream + flatten (dense & sparse text per candidate)
-  → integrity    honeypot HARD GATE  +  JD disqualifier penalties
-  → features     6 interpretable [0,1] features, each tied to a JD line
+  → features     interpretable [0,1] features, each tied to a JD line
+  → integrity    honeypot detection + JD disqualifier flags
   → retrieval    hybrid JD-similarity: e5-small dense (precomputed) + BM25
-  → LTR          XGBoost over the features (proxy label = the JD rubric)
-  → scoring      base × behavioral-availability × penalties ; honeypot → 0
+
+  STAGE 1  candidate generation — data-driven gate (role_fit + integrity).
+           100k → 10.9k eligible, 100% recall of relevant (measured, lossless).
+  STAGE 2  re-ranking — XGBoost LTR + linear blend over the DIFFERENTIATORS
+           (experience, skill depth, systems evidence, semantic, location).
+
+  → scoring      base × behavioral-availability × penalties ; gated-out → 0
   → reasoning    fact-grounded 1–2 sentence justification
   → submission   write + self-validate top-100 CSV
 ```
 
-Two-stage compute: **embeddings precomputed once offline**; the **ranking step**
-loads the cached matrix and finishes well within the 5-min / 16 GB / CPU /
-no-network budget.
+**Embeddings precomputed once offline**; the ranking step loads the cached matrix
+and finishes in ~45 s — well within the 5-min / 16 GB / CPU / no-network budget.
+
+**No arbitrary weights, no LLM at rank time.** Re-rank weights are *informed by
+the ablation* (measured marginal contribution), not a "0.4 + 0.3 + 0.3" guess —
+and no hosted LLM is called during ranking (that would fail the compute gate).
 
 ---
 

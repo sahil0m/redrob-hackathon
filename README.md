@@ -87,19 +87,44 @@ engineer who *built a recommender at a product company* **is**, even without the
 buzzwords. So every design choice here optimises for **reading the profile**, not
 the vocabulary.
 
-### Pipeline
+### Pipeline — explicit two-stage retrieval
+
+Like every real production ranking system, we separate **recall** (who is worth
+ranking) from **precision** (what order). We made this split explicit after a
+leave-one-out ablation showed that, within the top-100, `role_fit` is saturated
+at 1.0 for everyone — it decides *entry*, not *order*. So `role_fit` is the gate;
+the differentiators do the re-ranking.
 
 ```
 candidates.jsonl
-  └─ data.py          stream + flatten to CandidateView (+ dense/sparse text)
-  └─ integrity.py     honeypot gate (hard) + JD disqualifier flags (penalties)
-  └─ features.py      named [0,1] features, each justified by a JD sentence
-  └─ retrieval.py     hybrid JD similarity: e5-small dense (cached) + BM25
-  └─ ltr.py           XGBoost over the features, trained on a JD-rubric proxy label
-  └─ scoring.py       base x behavioral-availability x disqualifier-penalty; honeypot→0
-  └─ reasoning.py     1-2 sentence justification from the facts that drove the score
-  └─ submission.py    write + self-validate the top-100 CSV
+  └─ data.py                  stream + flatten to CandidateView (+ dense/sparse text)
+  └─ features.py              named [0,1] features, each justified by a JD sentence
+  └─ integrity.py             honeypot detection + JD disqualifier flags
+  └─ retrieval.py             hybrid JD similarity: e5-small dense (cached) + BM25
+  │
+  ├─ STAGE 1  candidate_generation.py
+  │     data-driven eligibility gate: non-honeypot AND (role_fit≥0.6 OR
+  │     adjacent-title-with-strong-systems-evidence). 100k → ~10.9k, 100% recall
+  │     of relevant candidates (measured, lossless).
+  │
+  └─ STAGE 2  rerank.py + ltr.py
+        re-rank the eligible set on the DIFFERENTIATORS (experience, skill depth,
+        systems evidence, semantic, location) — role_fit excluded (it's the gate).
+        XGBoost LTR trained on the eligible set's JD-rubric proxy labels;
+        interpretable linear blend kept as the defensible fallback.
+  └─ scoring.py               base × behavioral-availability × disqualifier-penalty;
+                              honeypot or ineligible → 0
+  └─ reasoning.py             1-2 sentence justification from the facts that drove the rank
+  └─ submission.py            write + self-validate the top-100 CSV
 ```
+
+**Why weights aren't arbitrary.** The Stage-2 weights are *informed by* a
+leave-one-out ablation (`scripts/derive_weights.py`), not hand-picked — each
+differentiator's weight reflects its measured marginal contribution to the
+composite, tempered by domain logic to avoid overfitting our own eval labels.
+There is no "0.4 retrieval + 0.3 model + 0.3 LLM" guesswork, and crucially **no
+LLM is called at rank time** (that would violate the no-network constraint and
+fail Stage 3).
 
 ### The five things that matter, and how we handle each
 
@@ -114,20 +139,24 @@ candidates.jsonl
 ### Scoring, precisely
 
 ```
-base    = Σ weight[f]·feature[f]  +  0.35·semantic_sim     (renormalised to [0,1])
-        (or the XGBoost LTR prediction over the same features)
-score   = base · behavioral_mult · Π disqualifier_penalty
-score   = 0   if honeypot
+Stage 1:  eligible = (not honeypot) AND (role_fit ≥ 0.6
+                       OR (adjacent role AND system_evidence ≥ 0.6))
+
+Stage 2:  base  = Σ rerank_weight[f]·feature[f]  +  0.30·semantic_sim   ([0,1])
+                  (or the XGBoost LTR prediction over the same differentiators)
+          score = base · behavioral_mult · Π disqualifier_penalty
+          score = 0   if honeypot or not eligible
 ```
 
-Every `weight` and threshold lives in [`jd_spec.py`](src/redrob_ranker/jd_spec.py)
-with a comment quoting the JD sentence that justifies it. The linear blend is a
-strong, fully-interpretable ranker on its own; the XGBoost layer learns the
-non-linear feature interactions on top of a **proxy relevance label distilled
-transparently from the JD's own rubric** (we have no access to ground truth, so we
-encode the JD's stated "ideal candidate" as the target — see
-[`ltr.py`](src/redrob_ranker/ltr.py)). The linear score is retained on every
-candidate as an interpretable fallback and sanity check.
+Thresholds and the JD-justified feature definitions live in
+[`jd_spec.py`](src/redrob_ranker/jd_spec.py); the gate is in
+[`candidate_generation.py`](src/redrob_ranker/candidate_generation.py) and the
+re-rank weights in [`rerank.py`](src/redrob_ranker/rerank.py). The interpretable
+linear blend is a strong ranker on its own; the XGBoost layer learns non-linear
+interactions on top of a **proxy relevance label distilled transparently from the
+JD's own rubric** (we have no ground truth, so we encode the JD's stated "ideal
+candidate" as the target — see [`ltr.py`](src/redrob_ranker/ltr.py)). The linear
+score is retained on every candidate as an interpretable fallback and sanity check.
 
 ---
 
