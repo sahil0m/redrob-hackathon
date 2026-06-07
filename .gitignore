@@ -27,3 +27,5 @@ Thumbs.db
 
 # Output (regenerable)
 submission.csv
+submission.csv
+_test_*.csv
