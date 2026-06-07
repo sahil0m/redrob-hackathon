@@ -59,23 +59,18 @@ def role_fit(c: CandidateView) -> float:
     hist_core = any(t in hist_titles for t in jd_spec.CORE_TITLE_TERMS)
     hist_adj = any(t in hist_titles for t in jd_spec.ADJACENT_TITLE_TERMS)
 
-    score = 0.0
     if cur_core:
         score = 1.0
     elif cur_adj:
-        score = 0.62              # plausible path in; JD blesses the data/backend route
+        # adjacent title (data/backend/SWE) — plausible path in; lifted if the
+        # candidate has also held a core role before (JD blesses this route).
+        score = 0.80 if hist_core else 0.62
     elif hist_core:
         score = 0.55              # was on-role recently, currently drifted
     elif hist_adj:
         score = 0.30
     else:
         score = 0.05              # off-role: HR, Accountant, Civil Eng, etc.
-
-    # Small lift if the title history reinforces a current core/adjacent role.
-    if cur_core and hist_core:
-        score = 1.0
-    if cur_adj and hist_core:
-        score = min(1.0, score + 0.18)
     return _clip01(score)
 
 
@@ -136,20 +131,25 @@ def must_have_skills(c: CandidateView) -> float:
 
 def experience_fit(c: CandidateView) -> float:
     """
-    Experience in the JD's band, weighted toward product (not services) time.
-    JD ideal: 6-8 yrs total, 4-5 in applied ML at product companies. The 5-9
-    is a soft range, so we use a smooth trapezoid: full credit in [6,8], tapering
-    to ACCEPTABLE bounds, never a hard cut.
+    Experience credit, weighted toward product (not services) time.
+
+    The JD gives two numbers: the IDEAL "6-8 years" and the STATED requirement
+    "5-9 years", and is explicit that "this is a range, not a requirement ...
+    some people hit senior judgment at 4 years ... we'll seriously consider
+    candidates outside the band if other signals are strong." So we do NOT punish
+    the stated range: full credit across the ideal [6,8], still-strong credit
+    (>=0.8) across the stated [5,9], and a gentle taper outside — never a cliff.
+    Implemented as linear interpolation over JD-anchored points.
     """
     yoe = c.years_of_experience
-    lo, hi = jd_spec.IDEAL_YOE_LOW, jd_spec.IDEAL_YOE_HIGH
-    alo, ahi = jd_spec.ACCEPTABLE_YOE_LOW, jd_spec.ACCEPTABLE_YOE_HIGH
-    if lo <= yoe <= hi:
-        band = 1.0
-    elif yoe < lo:
-        band = _clip01((yoe - alo) / (lo - alo)) if lo > alo else 0.0
-    else:  # yoe > hi
-        band = _clip01((ahi - yoe) / (ahi - hi)) if ahi > hi else 0.0
+    # (years, credit) anchors: ideal 6-8 = 1.0; stated 5 and 9 = 0.8; taper to 0.
+    anchors = [(0.0, 0.0), (4.0, 0.45), (5.0, 0.80), (6.0, 1.0),
+               (8.0, 1.0), (9.0, 0.80), (11.0, 0.40), (13.0, 0.0), (50.0, 0.0)]
+    band = 0.0
+    for (x0, y0), (x1, y1) in zip(anchors, anchors[1:]):
+        if x0 <= yoe <= x1:
+            band = y0 + (y1 - y0) * ((yoe - x0) / (x1 - x0)) if x1 > x0 else y0
+            break
 
     # Product-vs-services: fraction of career months at non-consulting companies.
     total_m = sum(j.get("duration_months", 0) or 0 for j in c.career)

@@ -29,10 +29,26 @@ layer can cite the exact reason and so the run prints an auditable summary.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
 from . import jd_spec
 from .data import CandidateView, parse_date
+
+
+def _count_word_terms(text: str, terms) -> int:
+    """Count whole-word/phrase occurrences of `terms` in `text`.
+
+    Plain substring matching is unsafe for short domain words — e.g. "search"
+    is a substring of "research" and "text" of "context", which would silently
+    corrupt the CV/speech-vs-NLP-IR comparison below. We anchor each term at word
+    boundaries so "search" matches "search" but not "research".
+    """
+    total = 0
+    for t in terms:
+        # \b works for alphanumeric terms; phrases with spaces are fine too.
+        total += len(re.findall(r"\b" + re.escape(t.strip()) + r"\b", text))
+    return total
 
 
 @dataclass
@@ -120,8 +136,9 @@ def detect_disqualifiers(c: CandidateView) -> dict[str, str]:
             )
 
     # --- CV/speech/robotics dominant without NLP/IR exposure. ---
-    other_domain_hits = sum(full_text.count(t) for t in jd_spec.OTHER_DOMAIN_TERMS)
-    nlp_ir_hits = sum(full_text.count(t) for t in jd_spec.NLP_IR_TERMS)
+    # Word-boundary matching: avoids "search" matching "research", "text" "context".
+    other_domain_hits = _count_word_terms(full_text, jd_spec.OTHER_DOMAIN_TERMS)
+    nlp_ir_hits = _count_word_terms(full_text, jd_spec.NLP_IR_TERMS)
     if other_domain_hits >= 3 and nlp_ir_hits == 0:
         flags["wrong_ml_domain"] = (
             "profile is dominated by computer-vision/speech/robotics terms with no "

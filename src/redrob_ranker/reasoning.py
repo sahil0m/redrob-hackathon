@@ -57,9 +57,13 @@ def _strengths(sc: ScoredCandidate) -> list[str]:
         if named:
             out.append(f"retrieval/eval skills incl. {', '.join(named[:3])}")
 
-    # Experience band.
-    if v["experience_fit"] >= 0.7:
+    # Experience band — cite "in the JD's band" only when the actual years fall
+    # in the stated 5-9 range, so the text never overclaims.
+    yoe = view.years_of_experience
+    if 5.0 <= yoe <= 9.0:
         out.append(f"{_years(sc)} experience, in the JD's band")
+    elif v["experience_fit"] >= 0.55:
+        out.append(f"{_years(sc)} experience, near the JD's band")
 
     # Location.
     if v["location_fit"] >= 0.85:

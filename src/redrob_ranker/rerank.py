@@ -37,24 +37,29 @@ RERANK_FEATURES = [
     "location_fit",
 ]
 
-# Weights informed by leave-one-out ablation, tempered by domain logic.
+# Weights follow the JD's OWN priority tiers (the defensible ordering), informed
+# by ablation but deliberately NOT copied from it.
 #
-# Two ablations agree that experience_fit is the dominant differentiator within
-# the eligible set (full-pool drop -0.050; gated-pool the single largest drop).
-# But the gated ablation's raw answer was ~0.90 to experience alone — that is
-# partly circular (our eval labels themselves use in-band experience to separate
-# tier 3 from tier 4), and no recruiter ranks 90% on years. So we do NOT copy the
-# raw ablation; we keep experience as the clear top weight while preserving real
-# weight on skill depth and systems evidence, which the variance analysis shows
-# vary meaningfully across the eligible set (std 0.20 and 0.24). location and
-# bonus get small but non-zero weight (the JD lists them as real-but-secondary).
-# The chosen weights are then VALIDATED against the eval harness (they must not
-# reduce the composite vs uniform); see scripts/derive_weights.py and evaluate.py.
+# The JD is explicit about what matters most among on-role candidates:
+#   * "Things you absolutely need": shipped a ranking/search/recsys system
+#     (system_evidence) and the retrieval+eval stack (must_have_skills)  -> TOP.
+#   * "5-9 years ... a range, not a requirement ... we'll seriously consider
+#     candidates outside the band if other signals are strong"  -> experience is
+#     SECONDARY, not the lead signal.
+#   * Location "preferred"; bonus skills "nice to have but won't reject you".
+#
+# So system_evidence + must_have_skills (0.58 combined) dominate experience
+# (0.18). A naive ablation on our own eval labels suggested ~0.9 weight on
+# experience, but that is circular (the labels use in-band experience to split
+# tier 3 from tier 4) and contradicts the JD — so we reject it. This ordering is
+# also consistent with the LTR's proxy_label, where experience enters only as a
+# mild 0.7-1.0 modifier on top of competence. Validated against evaluate.py:
+# headline NDCG holds and the top-100 fills with senior systems-builders.
 RERANK_WEIGHTS = {
-    "experience_fit": 0.40,
-    "must_have_skills": 0.22,
-    "system_evidence": 0.20,
-    "location_fit": 0.10,
+    "system_evidence": 0.30,
+    "must_have_skills": 0.28,
+    "experience_fit": 0.18,
+    "location_fit": 0.16,
     "bonus_skills": 0.08,
 }
 
