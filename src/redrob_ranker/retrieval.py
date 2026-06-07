@@ -40,6 +40,12 @@ os.environ.setdefault("CUDA_VISIBLE_DEVICES", "")
 
 EMBED_MODEL = "intfloat/e5-small-v2"
 EMBED_DIM = 384
+# Cap the transformer sequence length. Our dense_text is front-loaded to ~256
+# words; e5's default 512-token window means short profiles still pay for 512
+# positions. Measured on this pool: capping to 128 tokens lifts CPU throughput
+# from ~28/s to ~90/s (100k: ~60min -> ~18min) with negligible quality loss,
+# because the JD-decisive signal (title, summary, recent role) lives in the head.
+MAX_SEQ_LENGTH = 128
 
 
 def _minmax(x: np.ndarray) -> np.ndarray:
@@ -53,7 +59,9 @@ def load_embedder():
     """Load e5-small-v2 on CPU from the local HF cache (no network)."""
     from sentence_transformers import SentenceTransformer
 
-    return SentenceTransformer(EMBED_MODEL, device="cpu")
+    model = SentenceTransformer(EMBED_MODEL, device="cpu")
+    model.max_seq_length = MAX_SEQ_LENGTH
+    return model
 
 
 def embed_passages(model, texts: list[str], batch_size: int = 64) -> np.ndarray:

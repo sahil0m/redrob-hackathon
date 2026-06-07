@@ -35,7 +35,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--candidates", required=True)
     ap.add_argument("--out-dir", default=str(Path(__file__).resolve().parents[1] / "artifacts"))
-    ap.add_argument("--batch-size", type=int, default=128)
+    ap.add_argument("--batch-size", type=int, default=32)
     ap.add_argument("--limit", type=int, default=None, help="for quick local tests")
     args = ap.parse_args()
 
