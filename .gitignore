@@ -29,3 +29,6 @@ Thumbs.db
 submission.csv
 submission.csv
 _test_*.csv
+
+# Generated deck (regenerable from DECK.md via scripts/build_deck.py)
+deck.html
