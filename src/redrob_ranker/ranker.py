@@ -165,18 +165,24 @@ def rank(
         for i in range(len(views))
     ]
 
-    # 5. Sort: score desc, tie-break by candidate_id ascending (matches validator).
+    # 5. Sort. We sort by the SAME rounded score that gets written to the CSV,
+    #    then by candidate_id ascending. The validator checks its tie-break rule
+    #    (equal scores => candidate_id ascending) against the written 6-dp values,
+    #    so sorting on raw floats could place two ids that round to equal scores
+    #    out of ascending order. Rounding first makes the written file satisfy the
+    #    rule by construction.
+    for sc in scored:
+        sc.score = round(sc.score, 6)
     scored.sort(key=lambda s: (-s.score, s.candidate_id))
     top = scored[:top_k]
 
-    # 6. Reasoning + assemble rows. Enforce strictly non-increasing score by rank
-    #    (the validator requires it); ties are already ordered by id ascending.
+    # 6. Reasoning + assemble rows (scores already rounded + non-increasing).
     rows: list[RankRow] = []
     for idx, sc in enumerate(top):
         rows.append(RankRow(
             candidate_id=sc.candidate_id,
             rank=idx + 1,
-            score=round(sc.score, 6),
+            score=sc.score,
             reasoning=reasoning.generate(sc, idx + 1),
         ))
 
