@@ -43,10 +43,12 @@ def _attach_semantic(
     emb_ids: np.ndarray | None,
     use_bm25: bool,
     log,
+    embed_live: bool = False,
 ) -> None:
     """Compute hybrid (dense+BM25) JD similarity and write it into each FeatureBundle."""
     n = len(views)
     dense = np.zeros(n, dtype=np.float32)
+    have_dense = False
 
     if embeddings is not None and emb_ids is not None:
         # Align cached embeddings to the current candidate order by id.
@@ -58,7 +60,17 @@ def _attach_semantic(
             row = id_to_row.get(v.candidate_id)
             if row is not None:
                 dense[i] = sims_all[row]
+        have_dense = True
         log(f"  dense similarity attached for {sum(1 for v in views if v.candidate_id in id_to_row)}/{n}")
+    elif embed_live:
+        # No cache: embed the current (small) set on the fly. Intended for the
+        # sandbox demo on <=100 candidates; fast at that size.
+        model = retrieval.load_embedder()
+        doc_mat = retrieval.embed_passages(model, [v.dense_text for v in views])
+        qvec = retrieval.embed_query(model, jd_spec.JD_QUERY_TEXT)
+        dense = retrieval.dense_similarity(qvec, doc_mat)
+        have_dense = True
+        log(f"  dense similarity embedded live for {n} candidates")
     else:
         log("  no precomputed embeddings found; dense similarity disabled (BM25-only)")
 
@@ -70,7 +82,7 @@ def _attach_semantic(
     else:
         sparse = np.zeros(n, dtype=np.float32)
 
-    if embeddings is not None:
+    if have_dense:
         hybrid = retrieval.hybrid_score(dense, sparse, dense_weight=0.7)
     else:
         # BM25 only
@@ -89,6 +101,7 @@ def rank(
     top_k: int = 100,
     limit: int | None = None,
     verbose: bool = True,
+    embed_live: bool = False,
 ) -> list[RankRow]:
     def log(msg: str) -> None:
         if verbose:
@@ -119,10 +132,16 @@ def rank(
             embeddings = np.load(emb_file)
             emb_ids = np.load(id_file, allow_pickle=True)
     log("Attaching hybrid (dense + BM25) JD similarity...")
-    _attach_semantic(views, fbs, embeddings, emb_ids, use_bm25, log)
+    _attach_semantic(views, fbs, embeddings, emb_ids, use_bm25, log, embed_live=embed_live)
 
     # 3. Optional LTR over interpretable features + JD-rubric proxy labels.
     ltr_bases: list[float | None] = [None] * len(views)
+    # XGBoost needs a reasonable sample to be stable; on tiny sets (sandbox demo)
+    # fall back to the interpretable linear blend.
+    MIN_LTR_SAMPLES = 500
+    if use_ltr and len(views) < MIN_LTR_SAMPLES:
+        log(f"  only {len(views)} candidates (<{MIN_LTR_SAMPLES}); using linear blend instead of LTR")
+        use_ltr = False
     if use_ltr:
         log("Training XGBoost LTR on JD-rubric proxy labels...")
         penalties = [scoring._disqualifier_penalty(r) for r in reports]
