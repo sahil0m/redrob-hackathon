@@ -16,8 +16,6 @@ the *intent* the JD spells out in its "How to read between the lines" and
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-
 
 # --------------------------------------------------------------------------- #
 # 1. The "ideal candidate" envelope (JD: "How to read between the lines")
@@ -153,42 +151,10 @@ STALE_DAYS = 180               # ~6 months, the JD's own example
 LOW_RESPONSE_RATE = 0.05       # the JD's own "5%" example
 
 
-@dataclass(frozen=True)
-class ScoringWeights:
-    """
-    Weights for the transparent linear component of the score. Each is annotated
-    with the JD rationale. The XGBoost learning-to-rank layer is trained on top
-    of these same features; this linear blend is both a strong baseline on its
-    own and the interpretable fallback we can defend by hand.
-
-    Weights sum to 1.0 across the positive components; penalties and the
-    behavioral multiplier are applied separately (see scoring.py).
-    """
-    # Does the candidate actually do this kind of work? (title + system evidence)
-    role_fit: float = 0.34          # the single most decisive anti-keyword-stuffer signal
-    # Concrete evidence of building retrieval/ranking/recsys systems
-    system_evidence: float = 0.22
-    # The specific "absolutely need" stack: retrieval tech + eval frameworks
-    must_have_skills: float = 0.18
-    # Experience in the right band, weighted toward product (not services)
-    experience_fit: float = 0.14
-    # LLM / fine-tuning / nice-to-haves
-    bonus_skills: float = 0.06
-    # Location / relocation alignment
-    location_fit: float = 0.06
-
-    def as_dict(self) -> dict[str, float]:
-        return {
-            "role_fit": self.role_fit,
-            "system_evidence": self.system_evidence,
-            "must_have_skills": self.must_have_skills,
-            "experience_fit": self.experience_fit,
-            "bonus_skills": self.bonus_skills,
-            "location_fit": self.location_fit,
-        }
-
-
-DEFAULT_WEIGHTS = ScoringWeights()
+# NOTE on scoring weights: the per-feature scoring weights live in rerank.py
+# (Stage 2), NOT here. They are split into a Stage-1 gate (role_fit) and Stage-2
+# re-rank differentiators, and the re-rank weights are informed by a leave-one-out
+# ablation rather than hand-set. See rerank.py and scripts/derive_weights.py.
 
 # The JD text, distilled into a single string we embed once for dense retrieval.
 # This is the "query" side of the semantic match. It is intentionally written in

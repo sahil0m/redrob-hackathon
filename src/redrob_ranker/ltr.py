@@ -34,7 +34,11 @@ from pathlib import Path
 
 import numpy as np
 
-from .features import FeatureBundle, VECTOR_NAMES
+from .features import FeatureBundle
+from .rerank import RERANK_FEATURES
+
+# Column order produced by FeatureBundle.rerank_vector().
+RERANK_VECTOR_NAMES = RERANK_FEATURES + ["semantic_sim", "behavioral_mult"]
 
 
 # --------------------------------------------------------------------------- #
@@ -127,7 +131,7 @@ def predict(model, feature_vectors: np.ndarray) -> np.ndarray:
 
 def save(model, path: str | Path) -> None:
     with open(path, "wb") as f:
-        pickle.dump({"model": model, "feature_names": VECTOR_NAMES}, f)
+        pickle.dump({"model": model, "feature_names": RERANK_VECTOR_NAMES}, f)
 
 
 def load(path: str | Path):
@@ -143,6 +147,6 @@ def feature_importance(model) -> dict[str, float]:
     out: dict[str, float] = {}
     for k, v in raw.items():
         idx = int(k[1:]) if k.startswith("f") else None
-        name = VECTOR_NAMES[idx] if idx is not None and idx < len(VECTOR_NAMES) else k
+        name = RERANK_VECTOR_NAMES[idx] if idx is not None and idx < len(RERANK_VECTOR_NAMES) else k
         out[name] = float(v)
     return out

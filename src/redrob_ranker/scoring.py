@@ -1,23 +1,23 @@
 """
-scoring.py — Combine features, semantic similarity, penalties, behavioral
-multiplier and the honeypot gate into a final fit score per candidate.
+scoring.py — Final score per candidate, in the two-stage framing.
 
-Score construction (all components in [0,1] unless noted):
+Stage 1 (candidate_generation) decides eligibility; this module computes the
+Stage-2 score for the candidates that passed, and forces everyone else to 0.
 
-    base   = Σ_w  weight[f] · feature[f]            # JD-justified linear blend
-           + semantic_weight · semantic_sim          # hybrid-retrieval intent signal
-    base   = base / (1 + semantic_weight)            # renormalise to [0,1]
+Score construction (components in [0,1] unless noted):
 
+    base   = rerank_base(features)                   # Stage-2 differentiator blend
+                                                       # (or the XGBoost LTR prediction)
     score  = base
-           · behavioral_mult                         # availability (0.55..1.0)
-           · disqualifier_penalty                    # JD anti-patterns (0..1)
-    score  = 0.0  if honeypot                         # hard gate (forced tier-0)
+           · behavioral_mult                          # availability (0.55..1.0)
+           · disqualifier_penalty                     # JD anti-patterns (0..1)
+    score  = 0.0  if honeypot OR not eligible          # gated out
 
-The linear blend is a strong, fully-interpretable ranker on its own. The
-XGBoost learning-to-rank model (ltr.py) is trained to refine the ordering using
-the same components as input features; when present, its prediction REPLACES the
-linear base before the multipliers, but we keep the linear score on every
-candidate so we can always explain and fall back.
+The re-rank base (rerank.py) excludes role_fit — that is the Stage-1 gate and is
+≈1.0 for every eligible candidate, so it carries no ordering information. The
+XGBoost LTR (ltr.py) refines the ordering over the same differentiators; the
+interpretable linear blend is always computed and stored as the fallback we can
+defend by hand.
 
 Disqualifier penalties are severities, not rejections, because the JD hedges most
 disqualifiers ("we will *probably* not move forward"). The one near-hard signal
@@ -28,15 +28,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from . import jd_spec
 from .data import CandidateView
 from .features import FeatureBundle
 from .integrity import IntegrityReport
-
-# How much the hybrid-retrieval semantic similarity contributes relative to the
-# summed feature weights (which total 1.0). 0.35 keeps structured features
-# dominant while letting semantic intent meaningfully reorder.
-SEMANTIC_WEIGHT = 0.35
 
 # Disqualifier penalty multipliers (1.0 = no penalty). Each cites the JD.
 DISQUALIFIER_PENALTIES = {
@@ -67,10 +61,11 @@ class ScoredCandidate:
 
 
 def _linear_base(fb: FeatureBundle) -> float:
-    w = jd_spec.DEFAULT_WEIGHTS.as_dict()
-    feat_sum = sum(w[name] * fb.values[name] for name in w)
-    blended = feat_sum + SEMANTIC_WEIGHT * fb.semantic_sim
-    return blended / (1.0 + SEMANTIC_WEIGHT)
+    """Stage-2 interpretable re-rank base. role_fit is excluded here on purpose:
+    it is the Stage-1 gate (≈1.0 for every eligible candidate), so it adds only a
+    constant offset to the order. See rerank.py for the weight rationale."""
+    from .rerank import rerank_base
+    return rerank_base(fb)
 
 
 def _disqualifier_penalty(report: IntegrityReport) -> float:
@@ -85,11 +80,18 @@ def score_candidate(
     fb: FeatureBundle,
     report: IntegrityReport,
     ltr_base: float | None = None,
+    eligible: bool = True,
 ) -> ScoredCandidate:
     """
     Produce a ScoredCandidate. If ltr_base is provided (XGBoost prediction in
-    [0,1]), it is used as the base; otherwise the interpretable linear blend is.
-    The linear blend is always computed and stored for explanation/fallback.
+    [0,1]), it is used as the Stage-2 base; otherwise the interpretable linear
+    re-rank blend is. The linear blend is always computed and stored for
+    explanation/fallback.
+
+    `eligible` is the Stage-1 gate decision. Ineligible candidates (off-role,
+    insufficient evidence) and honeypots are forced to score 0 so they can never
+    surface in the top-100 — this is the candidate-generation half of the
+    two-stage design.
     """
     linear = _linear_base(fb)
     base = ltr_base if ltr_base is not None else linear
@@ -97,8 +99,8 @@ def score_candidate(
 
     penalty = _disqualifier_penalty(report)
     score = base * fb.behavioral_mult * penalty
-    if report.is_honeypot:
-        score = 0.0  # forced tier-0; never surface an impossible profile
+    if report.is_honeypot or not eligible:
+        score = 0.0  # gated out: impossible profile or off-role / thin evidence
 
     sc = ScoredCandidate(
         candidate_id=view.candidate_id,

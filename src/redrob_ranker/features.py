@@ -2,11 +2,11 @@
 features.py — Turn a CandidateView into a named, interpretable feature vector.
 
 Every feature is a float in [0, 1] (higher = better fit) and is documented with
-the JD rationale behind it. The same vector feeds two consumers:
-  1. The transparent linear scorer (scoring.py), which blends a subset with the
-     JD-justified weights in jd_spec.ScoringWeights.
-  2. The XGBoost learning-to-rank model, which learns a non-linear blend over the
-     full vector.
+the JD rationale behind it. The features feed both stages:
+  1. role_fit drives the Stage-1 eligibility gate (candidate_generation.py).
+  2. The differentiator features feed the Stage-2 re-ranker — both the
+     interpretable linear blend (rerank.py) and the XGBoost LTR (ltr.py), which
+     learns a non-linear blend over them.
 
 Keeping features named and bounded is what lets the reasoning layer say *which*
 features earned or cost a candidate their rank, and lets us defend each number.
@@ -261,9 +261,16 @@ class FeatureBundle:
     behavioral_components: dict           # breakdown for reasoning
     semantic_sim: float = 0.0             # filled in by scoring (hybrid retrieval)
 
-    def vector(self) -> list[float]:
-        """Ordered numeric vector for the XGBoost model (features + behavior + semantic)."""
-        return [self.values[n] for n in FEATURE_NAMES] + [self.behavioral_mult, self.semantic_sim]
+    def rerank_vector(self) -> list[float]:
+        """Stage-2 re-rank vector for XGBoost: the differentiator features +
+        semantic + behavioral. role_fit is excluded (it's the Stage-1 gate and is
+        ≈1.0 across the eligible set, so it carries no ordering information)."""
+        from .rerank import RERANK_FEATURES
+        return [self.values[n] for n in RERANK_FEATURES] + [self.semantic_sim, self.behavioral_mult]
+
+
+# role_fit is computed but used as the Stage-1 gate (candidate_generation), not
+# as a Stage-2 re-rank weight. See rerank.RERANK_FEATURES for the re-rank set.
 
 
 def extract(c: CandidateView) -> FeatureBundle:
@@ -277,7 +284,3 @@ def extract(c: CandidateView) -> FeatureBundle:
     }
     mult, comp = behavioral_multiplier(c)
     return FeatureBundle(values=vals, behavioral_mult=mult, behavioral_components=comp)
-
-
-# Names of every column in FeatureBundle.vector(), for XGBoost feature importance.
-VECTOR_NAMES = FEATURE_NAMES + ["behavioral_mult", "semantic_sim"]

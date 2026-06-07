@@ -17,6 +17,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+from redrob_ranker.candidate_generation import passes_gate
 from redrob_ranker.data import build_view
 from redrob_ranker.features import FEATURE_NAMES, extract
 from redrob_ranker.integrity import assess
@@ -128,6 +129,48 @@ def test_keyword_stuffer_flagged():
     ]
     rep = assess(build_view(c))
     assert "keyword_stuffer" in rep.disqualifier_flags
+
+
+# --------------------------------------------------------------------------- #
+# Stage 1 — candidate generation gate
+# --------------------------------------------------------------------------- #
+
+def _gate(c: dict) -> bool:
+    v = build_view(c)
+    return passes_gate(v, extract(v), assess(v)).eligible
+
+
+def test_gate_admits_on_role_systems_builder():
+    assert _gate(_base_candidate()) is True
+
+
+def test_gate_rejects_off_role_no_evidence():
+    c = _base_candidate(profile={
+        "current_title": "Accountant", "headline": "Accountant", "summary": "Finance pro.",
+    })
+    c["career_history"][0]["title"] = "Accountant"
+    c["career_history"][0]["description"] = "Managed ledgers and tax filing."
+    c["skills"] = [{"name": "Excel", "proficiency": "advanced", "endorsements": 5, "duration_months": 40}]
+    assert _gate(c) is False
+
+
+def test_gate_rejects_honeypot():
+    c = _base_candidate()
+    c["skills"].append({"name": "Spark", "proficiency": "expert", "endorsements": 0, "duration_months": 0})
+    assert _gate(c) is False
+
+
+def test_gate_admits_adjacent_with_strong_systems_evidence():
+    # Adjacent title (Data Engineer) but career clearly shows recsys/ranking work.
+    c = _base_candidate(profile={
+        "current_title": "Data Engineer", "headline": "Data Engineer",
+        "summary": "Built recommendation and ranking systems and retrieval pipelines.",
+    })
+    c["career_history"][0]["title"] = "Data Engineer"
+    c["career_history"][0]["description"] = (
+        "Built a recommendation system and search ranking pipeline with embeddings and retrieval."
+    )
+    assert _gate(c) is True
 
 
 # --------------------------------------------------------------------------- #
