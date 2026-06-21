@@ -65,9 +65,16 @@ def main() -> None:
     dt = time.time() - t0
     print(f"  embedded {len(ids)} in {dt:.1f}s ({len(ids)/dt:.0f}/s), shape {emb.shape}")
 
+    # Also cache the JD query embedding so the ranking step is a pure dot product
+    # with NO model load at rank time (faster, and robust to a broken torch env).
+    from redrob_ranker import jd_spec
+    qvec = retrieval.embed_query(model, jd_spec.JD_QUERY_TEXT)
+
     np.save(out_dir / "embeddings.npy", emb)
     np.save(out_dir / "candidate_ids.npy", np.array(ids))
-    print(f"Saved embeddings.npy ({emb.nbytes/1e6:.0f} MB) and candidate_ids.npy to {out_dir}")
+    np.save(out_dir / "jd_query.npy", qvec)
+    print(f"Saved embeddings.npy ({emb.nbytes/1e6:.0f} MB), candidate_ids.npy, "
+          f"and jd_query.npy to {out_dir}")
 
 
 if __name__ == "__main__":

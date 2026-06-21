@@ -31,9 +31,19 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from functools import lru_cache
 
 from . import jd_spec
 from .data import CandidateView, parse_date
+
+
+@lru_cache(maxsize=None)
+def _compiled_terms(terms: tuple[str, ...]) -> "re.Pattern":
+    """Compile a term-set into ONE word-boundary alternation, cached per set.
+    One scan per candidate instead of len(terms) scans — keeps the full-pool run
+    well within budget."""
+    alt = "|".join(re.escape(t.strip()) for t in terms if t.strip())
+    return re.compile(r"\b(?:" + alt + r")\b")
 
 
 def _count_word_terms(text: str, terms) -> int:
@@ -41,14 +51,11 @@ def _count_word_terms(text: str, terms) -> int:
 
     Plain substring matching is unsafe for short domain words — e.g. "search"
     is a substring of "research" and "text" of "context", which would silently
-    corrupt the CV/speech-vs-NLP-IR comparison below. We anchor each term at word
-    boundaries so "search" matches "search" but not "research".
+    corrupt the CV/speech-vs-NLP-IR comparison below. We anchor at word
+    boundaries so "search" matches "search" but not "research", using a single
+    precompiled alternation per term-set.
     """
-    total = 0
-    for t in terms:
-        # \b works for alphanumeric terms; phrases with spaces are fine too.
-        total += len(re.findall(r"\b" + re.escape(t.strip()) + r"\b", text))
-    return total
+    return len(_compiled_terms(tuple(terms)).findall(text))
 
 
 @dataclass

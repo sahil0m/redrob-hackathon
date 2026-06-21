@@ -44,8 +44,15 @@ def _attach_semantic(
     use_bm25: bool,
     log,
     embed_live: bool = False,
+    query_vec: np.ndarray | None = None,
 ) -> None:
-    """Compute hybrid (dense+BM25) JD similarity and write it into each FeatureBundle."""
+    """Compute hybrid (dense+BM25) JD similarity and write it into each FeatureBundle.
+
+    The dense path NEVER loads the embedding model at rank time when the JD query
+    vector is cached (query_vec): it is just a matrix-vector dot product against
+    the precomputed candidate matrix. The model is only loaded for the live-embed
+    sandbox path, and even there a load failure degrades gracefully to BM25 — so a
+    broken torch/transformers environment can never break the submission."""
     n = len(views)
     dense = np.zeros(n, dtype=np.float32)
     have_dense = False
@@ -53,24 +60,35 @@ def _attach_semantic(
     if embeddings is not None and emb_ids is not None:
         # Align cached embeddings to the current candidate order by id.
         id_to_row = {cid: i for i, cid in enumerate(emb_ids.tolist())}
-        model = retrieval.load_embedder()
-        qvec = retrieval.embed_query(model, jd_spec.JD_QUERY_TEXT)
-        sims_all = retrieval.dense_similarity(qvec, embeddings)
-        for i, v in enumerate(views):
-            row = id_to_row.get(v.candidate_id)
-            if row is not None:
-                dense[i] = sims_all[row]
-        have_dense = True
-        log(f"  dense similarity attached for {sum(1 for v in views if v.candidate_id in id_to_row)}/{n}")
+        qvec = query_vec
+        if qvec is None:
+            # No cached query vector — embed the single JD query once. Wrapped so a
+            # broken embedding environment falls back to BM25 rather than aborting.
+            try:
+                model = retrieval.load_embedder()
+                qvec = retrieval.embed_query(model, jd_spec.JD_QUERY_TEXT)
+            except Exception as e:  # noqa: BLE001 — any import/runtime failure
+                log(f"  embedder unavailable ({type(e).__name__}); dense disabled, using BM25 only")
+                qvec = None
+        if qvec is not None:
+            sims_all = retrieval.dense_similarity(qvec, embeddings)
+            for i, v in enumerate(views):
+                row = id_to_row.get(v.candidate_id)
+                if row is not None:
+                    dense[i] = sims_all[row]
+            have_dense = True
+            log(f"  dense similarity attached for {sum(1 for v in views if v.candidate_id in id_to_row)}/{n}")
     elif embed_live:
-        # No cache: embed the current (small) set on the fly. Intended for the
-        # sandbox demo on <=100 candidates; fast at that size.
-        model = retrieval.load_embedder()
-        doc_mat = retrieval.embed_passages(model, [v.dense_text for v in views])
-        qvec = retrieval.embed_query(model, jd_spec.JD_QUERY_TEXT)
-        dense = retrieval.dense_similarity(qvec, doc_mat)
-        have_dense = True
-        log(f"  dense similarity embedded live for {n} candidates")
+        # No cache: embed the current (small) set on the fly (sandbox demo).
+        try:
+            model = retrieval.load_embedder()
+            doc_mat = retrieval.embed_passages(model, [v.dense_text for v in views])
+            qvec = retrieval.embed_query(model, jd_spec.JD_QUERY_TEXT)
+            dense = retrieval.dense_similarity(qvec, doc_mat)
+            have_dense = True
+            log(f"  dense similarity embedded live for {n} candidates")
+        except Exception as e:  # noqa: BLE001
+            log(f"  embedder unavailable ({type(e).__name__}); dense disabled, using BM25 only")
     else:
         log("  no precomputed embeddings found; dense similarity disabled (BM25-only)")
 
@@ -123,16 +141,22 @@ def rank(
         reports.append(assess(v))
     log(f"  {len(views)} candidates in {time.time()-t_start:.1f}s")
 
-    # 2. Hybrid semantic similarity.
-    embeddings = emb_ids = None
+    # 2. Hybrid semantic similarity. We load the precomputed candidate matrix AND
+    #    the precomputed JD query vector, so the rank step does a pure dot product
+    #    with no embedding-model load (faster, and robust to a broken torch env).
+    embeddings = emb_ids = query_vec = None
     if artifacts_dir:
         adir = Path(artifacts_dir)
         emb_file, id_file = adir / "embeddings.npy", adir / "candidate_ids.npy"
+        q_file = adir / "jd_query.npy"
         if emb_file.exists() and id_file.exists():
             embeddings = np.load(emb_file)
             emb_ids = np.load(id_file, allow_pickle=True)
+        if q_file.exists():
+            query_vec = np.load(q_file)
     log("Attaching hybrid (dense + BM25) JD similarity...")
-    _attach_semantic(views, fbs, embeddings, emb_ids, use_bm25, log, embed_live=embed_live)
+    _attach_semantic(views, fbs, embeddings, emb_ids, use_bm25, log,
+                     embed_live=embed_live, query_vec=query_vec)
 
     # 3. STAGE 1 — candidate generation. Gate the pool down to the eligible set
     #    (on-role / strong-adjacent, non-honeypot). Measured lossless recall of

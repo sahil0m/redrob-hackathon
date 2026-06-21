@@ -33,8 +33,12 @@ from redrob_ranker import retrieval  # noqa: E402
 
 def rank_with_overrides(views, fbs, reports, zero_feature=None, zero_semantic=False,
                         zero_behavioral=False):
-    """Re-score with one signal ablated; return ordered candidate_ids."""
+    """Re-score with one signal ablated; return ordered candidate_ids.
+
+    Applies the Stage-1 gate exactly like the real ranker, so the ablation
+    reflects the two-stage pipeline (off-role candidates are forced to 0)."""
     import copy
+    from redrob_ranker.candidate_generation import passes_gate
     scored = []
     for v, fb0, rep in zip(views, fbs, reports):
         fb = copy.copy(fb0)
@@ -45,7 +49,8 @@ def rank_with_overrides(views, fbs, reports, zero_feature=None, zero_semantic=Fa
             fb.semantic_sim = 0.0
         bmult = 1.0 if zero_behavioral else fb.behavioral_mult
         fb.behavioral_mult = bmult
-        sc = scoring.score_candidate(v, fb, rep)
+        eligible = passes_gate(v, fb0, rep).eligible
+        sc = scoring.score_candidate(v, fb, rep, eligible=eligible)
         scored.append(sc)
     scored.sort(key=lambda s: (-s.score, s.candidate_id))
     return scored

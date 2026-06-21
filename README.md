@@ -133,8 +133,25 @@ fail Stage 3).
 | **Keyword stuffers** (AI skills, wrong title) | `role_fit` (current/past title) gates the score; an explicit `keyword_stuffer` penalty (0.15x) when AI skills coexist with an off-role title and no ML in the career text. |
 | **Honeypots** (~80, impossible profiles; >10% in top-100 = DQ) | A high-precision rule gate forces them to score 0. Calibrated on the full pool to catch the surgically-impossible profiles (expert skill with 0 months used; a role longer than the whole career) with no false positives. **0 honeypots in our top-100.** |
 | **Plain-language Tier-5s** (real fits, no buzzwords) | Two-tier `system_evidence` rewards described work (recommendation/ranking/retrieval *and* production-ML/A-B-testing) from free text; dense e5 retrieval matches *intent*, surfacing them above keyword-stuffers. |
-| **Behavioral twins** | A behavioral availability multiplier (recency, recruiter-response-rate, open-to-work, verification, interview reliability) in `[0.55, 1.0]` re-orders otherwise-equal candidates without ever dominating fit. |
+| **Behavioral twins** | A behavioral availability multiplier (recency, recruiter-response-rate, notice-period, open-to-work, interview reliability, verification) in `[0.55, 1.0]` re-orders otherwise-equal candidates without ever dominating fit. |
 | **Reasoning quality** (Stage 4) | Reasoning is assembled only from facts that drove the score — never hallucinated — with tone keyed to rank. |
+
+### Signal integration (the JD names specific signals — we use them)
+
+The challenge asks to *"leverage all available information."* Beyond profile and
+career text we use these `redrob_signals`, each tied to an explicit JD line:
+
+- **`skill_assessment_scores`** → objective validation inside `must_have_skills`:
+  a candidate who *lists* AI/ML skills but scored poorly on the platform's
+  assessment of them is making hollow claims; a high score is validated ability.
+  This is the strongest *objective* anti-keyword-stuffer signal in the data.
+- **`recruiter_response_rate`, `last_active_date`, `interview_completion_rate`,
+  `open_to_work_flag`, `notice_period_days`, verification flags** → the
+  availability multiplier (JD: *"not actually available — down-weight"*;
+  *"sub-30-day notice preferred"*).
+- **`github_activity_score`** → lifts the bonus signal (JD values open-source;
+  *"closed-source-only 5+ years"* is an anti-pattern).
+- **`willing_to_relocate`** → location fit (Pune/Noida + relocation).
 
 ### Scoring, precisely
 

@@ -69,12 +69,19 @@ candidates.jsonl
   → submission   write + self-validate top-100 CSV
 ```
 
-**Embeddings precomputed once offline**; the ranking step loads the cached matrix
-and finishes in ~45 s — well within the 5-min / 16 GB / CPU / no-network budget.
+**Embeddings + the JD query vector are precomputed once offline**; the ranking
+step is then a pure dot product — it loads NO model at all (~45 s, well within
+the 5-min / 16 GB / CPU / no-network budget), and falls back to BM25 if the
+embedding stack is ever unavailable. Nothing can break a submission.
 
-**No arbitrary weights, no LLM at rank time.** Re-rank weights are *informed by
-the ablation* (measured marginal contribution), not a "0.4 + 0.3 + 0.3" guess —
+**No arbitrary weights, no LLM at rank time.** Re-rank weights follow the JD's
+own priority tiers (skills+systems > experience), not a "0.4 + 0.3 + 0.3" guess —
 and no hosted LLM is called during ranking (that would fail the compute gate).
+
+**Full signal integration.** We use the rich `redrob_signals` the way the JD
+asks: `skill_assessment_scores` as an *objective* anti-stuffer validator,
+response-rate / recency / notice-period / interview-reliability as the
+availability multiplier, and `github_activity_score` for the open-source signal.
 
 ---
 

@@ -126,7 +126,41 @@ def must_have_skills(c: CandidateView) -> float:
     listed = _clip01(1.0 - math.exp(-0.7 * (retr_skill + eval_skill))) * trust
     demonstrated = _clip01(1.0 - math.exp(-0.9 * (retr_work + eval_work)))
     # Demonstrated-in-work is worth more than merely-listed.
-    return _clip01(0.45 * listed + 0.55 * demonstrated)
+    base = _clip01(0.45 * listed + 0.55 * demonstrated)
+
+    # Objective validation via Redrob skill-assessment scores (0-100). This is the
+    # strongest anti-keyword-stuffer signal in the data: a candidate who *lists*
+    # AI/ML skills but scored poorly on the platform's assessment of them is making
+    # hollow claims; one who scored well is validated. Applied as a gentle
+    # multiplier, neutral when the candidate took no relevant assessment (absence
+    # is not a negative). JD/challenge: rank on demonstrated ability, not keywords.
+    return _clip01(base * _assessment_factor(c))
+
+
+# Skills whose assessment scores meaningfully validate technical credibility for
+# this role (retrieval/eval stack + the broader AI/ML/NLP space).
+_ASSESSMENT_RELEVANT = set(jd_spec.RETRIEVAL_TECH_TERMS + jd_spec.EVAL_FRAMEWORK_TERMS
+                           + jd_spec.LLM_TERMS) | {
+    "nlp", "machine learning", "deep learning", "ml", "recommendation", "ranking",
+    "data science", "neural", "computer vision", "model", "pytorch", "tensorflow",
+}
+
+
+def _assessment_factor(c: CandidateView) -> float:
+    """Multiplier in [~0.81, ~1.05] from Redrob skill_assessment_scores on the
+    AI/ML-relevant skills. 1.0 (neutral) when no relevant assessment was taken."""
+    scores = c.signals.get("skill_assessment_scores") or {}
+    if not scores:
+        return 1.0
+    relevant = [
+        v for k, v in scores.items()
+        if isinstance(v, (int, float)) and any(t.strip() in str(k).lower() for t in _ASSESSMENT_RELEVANT)
+    ]
+    if not relevant:
+        return 1.0
+    avg = sum(relevant) / len(relevant) / 100.0     # normalise 0-100 -> 0-1
+    # high assessment (≈1.0) -> 1.05 boost; low (≈0.25) -> ~0.81 reduction.
+    return 0.75 + 0.30 * avg
 
 
 def experience_fit(c: CandidateView) -> float:
@@ -166,11 +200,25 @@ def experience_fit(c: CandidateView) -> float:
 
 def bonus_skills(c: CandidateView) -> float:
     """JD 'nice to have': LLM fine-tuning (LoRA/QLoRA/PEFT), learning-to-rank,
-    HR-tech exposure, open-source. Lightly rewarded — never a primary driver."""
+    HR-tech exposure, AND open-source / external validation. Lightly rewarded —
+    never a primary driver.
+
+    The JD explicitly values open-source ("Open-source contributions in the AI/ML
+    space") and treats "closed-source proprietary systems for 5+ years without
+    external validation" as an anti-pattern. The Redrob github_activity_score
+    (0-100, or -1 if no GitHub) is the objective proxy for that, so a strong
+    GitHub presence lifts this bonus. -1/absent is neutral (50% have no GitHub
+    linked — absence is not penalised, since it's a 'nice to have')."""
     blob = f"{c.summary} {' '.join(str(j.get('description','')) for j in c.career)} " \
            f"{' '.join(str(s.get('name','')) for s in c.skills)}"
     hits = _contains_any(blob, jd_spec.LLM_TERMS)
-    return _clip01(1.0 - math.exp(-0.6 * hits))
+    llm_bonus = 1.0 - math.exp(-0.6 * hits)
+
+    gh = c.signals.get("github_activity_score")
+    gh_bonus = _clip01(gh / 70.0) if isinstance(gh, (int, float)) and gh > 0 else 0.0
+
+    # Either signal can carry the bonus; take the stronger so neither is required.
+    return _clip01(max(llm_bonus, gh_bonus))
 
 
 def location_fit(c: CandidateView) -> float:
@@ -232,10 +280,21 @@ def behavioral_multiplier(c: CandidateView) -> tuple[float, dict]:
     reliability = _clip01(icr) if isinstance(icr, (int, float)) else 0.7
     comp["interview_reliability"] = reliability
 
-    # Combine: weighted geometric-ish blend, then map to a gentle [0.55, 1.0] band
-    # so behavior re-orders ties and nudges, but never dominates fit.
-    raw = (0.42 * responsiveness + 0.28 * recency + 0.12 * open_flag
-           + 0.10 * reliability + 0.08 * verification)
+    # Notice period (JD: "We'd love sub-30-day notice ... 30+ day notice
+    # candidates are still in scope but the bar gets higher"). Shorter = more
+    # readily hireable. Full credit at <=30 days, gentle decline beyond.
+    notice = s.get("notice_period_days")
+    if isinstance(notice, (int, float)):
+        notice_credit = _clip01(1.0 - max(0.0, notice - 30) / 200.0)  # 30→1.0, 90→0.7, 150→0.4
+    else:
+        notice_credit = 0.7
+    comp["notice_period"] = notice_credit
+
+    # Combine: weighted blend, then map to a gentle [0.55, 1.0] band so behavior
+    # re-orders ties and nudges, but never dominates fit (the JD says behavior is
+    # "a multiplier or modifier on top of skill-match scoring").
+    raw = (0.36 * responsiveness + 0.26 * recency + 0.11 * open_flag
+           + 0.09 * reliability + 0.08 * notice_credit + 0.10 * verification)
     multiplier = 0.55 + 0.45 * _clip01(raw)
     return multiplier, comp
 
