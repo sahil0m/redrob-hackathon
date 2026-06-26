@@ -1,0 +1,316 @@
+India Runs with Redrob AI
+
+India’s Most Open Hackathon
+
+Coder or not. Student or not.
+
+From any city, any stream, any background.
+
+If you have ever thought about what India needs next, this is yours to build.
+
+* ₹50 Lakh+ Prize Pool
+* 3 Tracks
+* 42 Days
+
+Build what next India runs on.
+
+⸻
+
+Why India Runs with Redrob AI?
+
+India has 1.4 billion people. Almost none of them have an AI tool built for their reality.
+
+Many AI models were built in San Francisco. India deserves its own — an operating system that finally works for the way this country works, hires, learns, and earns.
+
+From a final-year student in Indore to a founder in Pune, that’s what Redrob AI is.
+
+But it isn’t going to be built alone.
+
+India Runs is where it gets built — with you.
+
+Builders, thinkers, designers, students, first-timers.
+
+If you’ve ever looked at how India works and thought:
+
+“This should be different.”
+
+This is your arena.
+
+⸻
+
+Who Should Participate?
+
+Built for anyone who’s ever looked at a problem and thought:
+
+“I could fix that.”
+
+You don’t need to code.
+
+You don’t need a degree.
+
+You don’t need to have done this before.
+
+If you have an idea worth building, this is yours to enter.
+
+⸻
+
+Why This Is For You
+
+Engineers & Developers
+
+If you ship code, you have a track here.
+
+Build intelligent systems that work at India scale.
+
+⸻
+
+MBAs & Business Strategists
+
+Product thinkers and growth builders aren’t a side track.
+
+Problem Statement 22 was built for you.
+
+⸻
+
+Designers & Creators
+
+UX, storytelling, interface thinking — core skills, not optional ones.
+
+⸻
+
+Students — Any Stream
+
+Engineering, commerce, arts, management.
+
+If you’re curious, you qualify.
+
+⸻
+
+First-Time Participants
+
+Never done a hackathon?
+
+Problem Statement 3 was built exactly for you.
+
+⸻
+
+Anyone Inspired to Build for India
+
+No credentials required.
+
+Just the drive to imagine what next India runs on.
+
+⸻
+
+Prize Pool
+
+₹50 Lakh+ Total Prize Pool
+
+Track 1
+
+The Data & AI Challenge
+
+Category	Prize
+Elite Builders	₹10 Lakhs
+Grand Champion (1 Winner)	₹5 Lakhs
+Special Tech Awards (50+ Flexible Winners)	₹2 Lakhs
+Strong Performers (10 Winners)	₹1 Lakh
+
+⸻
+
+Track 01 – The Data & AI Challenge
+
+Intelligent Candidate Discovery
+
+Ideal Participants
+
+* AI/ML Engineers
+* Data Scientists
+* Developers
+* Search & Retrieval Specialists
+* LLM Practitioners
+
+⸻
+
+Overview
+
+Are you ready to redefine the future of talent acquisition?
+
+Recruiters are tasked with finding the perfect fit from oceans of profiles, but traditional keyword filters are simply not cutting it.
+
+They miss the hidden gems — candidates whose true potential, intent, and subtle behavioral signals are lost in the noise.
+
+There has to be a smarter way.
+
+This challenge asks you to build an AI brain for modern hiring.
+
+We’re looking for intelligent systems that can move beyond surface-level keywords to:
+
+* Deeply understand context
+* Predict relevance
+* Transform massive talent pools into precise, actionable shortlists
+
+Join us to build the next generation of predictive ranking engines.
+
+⸻
+
+Your Mission: The Core Objective
+
+Develop a robust, workable Proof of Concept that doesn’t just filter candidates — it intelligently ranks them.
+
+Your system should act as the ultimate AI recruiter.
+
+⸻
+
+Core Requirements
+
+1. Deep Job Understanding
+
+Interpret complex and nuanced job descriptions.
+
+Your system should understand:
+
+* Required skills
+* Preferred skills
+* Experience requirements
+* Industry context
+* Seniority expectations
+
+⸻
+
+2. Contextual Relevance
+
+Move beyond keyword matching.
+
+Your system should understand:
+
+* Semantic similarity
+* Transferable skills
+* Career progression
+* Related technologies and domains
+
+⸻
+
+3. Signal Integration
+
+Leverage all available information:
+
+Candidate Profile Attributes
+
+* Skills
+* Education
+* Certifications
+* Experience
+
+Career Metadata
+
+* Job titles
+* Industry background
+* Career growth trajectory
+
+Behavioral & Activity Signals
+
+* Platform activity
+* Engagement patterns
+* Intent signals
+* Additional behavioral indicators
+
+⸻
+
+4. High-Quality Candidate Ranking
+
+Deliver:
+
+* Lightning-fast retrieval
+* Accurate ranking
+* Trustworthy recommendations
+* Recruiter-friendly explanations
+
+⸻
+
+Innovation Is Encouraged
+
+There is no fixed architecture.
+
+Unleash your innovation.
+
+Bring the best of your creativity.
+
+Possible approaches include:
+
+* Semantic Search
+* Dense Retrieval
+* Hybrid Search
+* Vector Embeddings
+* Learning-to-Rank
+* Knowledge Graphs
+* Large Language Models
+* Explainable AI Systems
+
+Or any combination you believe works best.
+
+⸻
+
+Submission Checklist
+
+Show us your brilliance.
+
+Your submission must include:
+
+1. The Code
+
+A well-organized GitHub repository containing:
+
+* Complete implementation
+* Source code
+* Dependencies
+* Reproducible workflow
+
+⸻
+
+2. The Blueprint
+
+Clear documentation explaining:
+
+* Methodology
+* Technical decisions
+* System architecture
+* Design tradeoffs
+* Ranking strategy
+
+⸻
+
+3. The Results
+
+A ranked output file in the predefined format containing:
+
+* Recommended candidates
+* Final ranking order
+* Submission-ready shortlist
+
+⸻
+
+Success Criteria
+
+The strongest solutions will demonstrate:
+
+* Deep job understanding
+* Context-aware candidate matching
+* Effective signal integration
+* Accurate ranking quality
+* Scalability
+* Explainability
+* Reproducibility
+* Real-world recruiter value
+
+⸻
+
+Build the Future of Hiring
+
+Move beyond keywords.
+
+Understand people.
+
+Rank talent intelligently.
+
+Build what next India runs on.
