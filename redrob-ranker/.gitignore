@@ -1,0 +1,34 @@
+# Data (large, provided separately — not committed)
+data/candidates.jsonl
+data/candidates.jsonl.gz
+*.jsonl
+*.jsonl.gz
+
+# Precomputed artifacts (regenerable via scripts/precompute.py)
+artifacts/*.npy
+artifacts/*.npz
+artifacts/*.pkl
+artifacts/*.faiss
+artifacts/*.bin
+artifacts/model_cache/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Output (regenerable)
+submission.csv
+submission.csv
+_test_*.csv
+
+# Generated deck (regenerable from DECK.md via scripts/build_deck.py)
+deck.html

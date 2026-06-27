@@ -3,4 +3,3 @@
 *.npy binary
 *.npz binary
 *.pkl binary
-*.jsonl filter=lfs diff=lfs merge=lfs -text

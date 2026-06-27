@@ -1,0 +1,25 @@
+# Redrob candidate ranker — pinned dependencies.
+#
+# CPU-only by design (the spec forbids GPU at rank time). For a clean CPU
+# install of torch, use the CPU wheel index:
+#   pip install torch==2.3.1 --index-url https://download.pytorch.org/whl/cpu
+#   pip install -r requirements.txt
+#
+# IMPORTANT: do NOT install torchvision. It is not needed for text embeddings,
+# and a torchvision/torch version mismatch makes recent `transformers` fail to
+# import (it eagerly pulls torchvision for object-detection code). The ranking
+# step is also hardened against this: it uses the precomputed JD query vector and
+# never loads the embedding model at rank time, and falls back to BM25-only if the
+# embedder cannot import — so a broken vision stack can never break a submission.
+
+# Only what the code actually imports (kept lean for fast, conflict-free repro):
+numpy==2.1.2          # arrays, the cached embedding matrix + dot products
+scipy==1.16.3         # xgboost companion
+scikit-learn==1.7.2   # xgboost sklearn API (XGBRegressor)
+xgboost==3.2.0        # Stage-2 learning-to-rank
+sentence-transformers==5.1.2  # e5-small-v2 embeddings (precompute / sandbox only)
+transformers==4.57.1          # transitive dep of sentence-transformers
+rank-bm25==0.2.2      # sparse lexical retrieval
+
+# torch: install the CPU build separately (see header). Pinned for reference:
+# torch==2.3.1   (CPU wheel).  Do NOT add torchvision.

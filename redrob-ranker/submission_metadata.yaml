@@ -1,0 +1,87 @@
+# Redrob Hackathon — Submission Metadata
+# Fill in the TODO fields with your team's details before submitting.
+
+# ============================================================================
+# Team identity
+# ============================================================================
+team_name: "TODO-your-team-name"
+
+primary_contact:
+  name: "TODO Full Name"
+  email: "univeonsedtech@gmail.com"
+  phone: "TODO +91-XXXXXXXXXX"
+
+team_members:
+  - name: "TODO Member 1"
+    email: "univeonsedtech@gmail.com"
+    role: "ML Engineer"
+
+# ============================================================================
+# Code and reproducibility
+# ============================================================================
+github_repo: "TODO https://github.com/YOUR_USERNAME/redrob-ranker"
+
+sandbox_link: "TODO https://huggingface.co/spaces/YOUR_USERNAME/redrob-ranker"
+
+reproduce_command: "python rank.py --candidates ./candidates.jsonl --out ./submission.csv"
+
+# ============================================================================
+# Compute environment
+# ============================================================================
+compute:
+  platform: "Local Windows 11 box"
+  cpu_cores: 20
+  ram_gb: 16
+  python_version: "3.12"
+  os: "Windows 11"
+  uses_gpu_for_inference: false        # CPU-only, enforced in code (CUDA_VISIBLE_DEVICES="")
+  has_network_during_ranking: false    # offline; HF_HUB_OFFLINE=1, TRANSFORMERS_OFFLINE=1
+  pre_computation_required: true        # embeddings precomputed offline
+  pre_computation_time_minutes: 30      # ~25-35 min one-time, CPU
+  ranking_time_seconds: 231            # ~46s on server, ~231s on local machine
+
+
+# ============================================================================
+# AI tools declaration (transparency only; honest declaration not penalized)
+# ============================================================================
+ai_tools_used:
+  - "Claude"
+
+ai_usage_summary: |
+  Used Claude as a pair-programming and code-review assistant during development
+  (architecture discussion, refactoring, docstrings). All design decisions,
+  feature definitions, JD-rubric encoding, honeypot calibration, and scoring
+  weights were authored and verified by the team against the actual dataset.
+  No candidate data was sent to any hosted LLM, and no LLM is called during
+  ranking (the pipeline is CPU-only and offline by constraint).
+
+# ============================================================================
+# Approach summary
+# ============================================================================
+methodology_summary: |
+  Intent-aware hybrid ranker, CPU-only and offline. We encode the JD as
+  structured, auditable fit criteria (every weight cites a JD sentence) rather
+  than keyword-matching. Per candidate we compute interpretable [0,1] features:
+  role_fit (title is the decisive anti-keyword-stuffer signal), system_evidence
+  (two-tier: built ranking/retrieval/recsys vs supporting production-ML/A-B work,
+  so plain-language Tier-5s are rewarded without buzzwords), must_have retrieval
+  + eval skills (with an endorsement/duration trust factor), experience band x
+  product-vs-services fraction, and location. A hybrid JD-similarity signal
+  combines e5-small-v2 dense embeddings (precomputed offline) with BM25. An
+  XGBoost learning-to-rank model refines the ordering, trained on a proxy
+  relevance label distilled transparently from the JD's own "ideal candidate"
+  rubric; the interpretable linear blend is kept as a fallback. The final score
+  is base x behavioral-availability multiplier x JD-disqualifier penalties, with
+  a hard honeypot gate to zero (0 honeypots in our top-100). Reasoning strings
+  are generated only from facts that drove each score. Ranking runs in well under
+  5 minutes on CPU once embeddings are cached.
+
+# ============================================================================
+# Declarations
+# ============================================================================
+declarations:
+  read_submission_spec: true
+  code_is_original_work: true
+  no_collusion: true
+  honeypot_check_done: true
+  reproduction_tested: true
