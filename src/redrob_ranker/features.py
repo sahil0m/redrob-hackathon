@@ -20,7 +20,11 @@ from __future__ import annotations
 
 import datetime as dt
 import math
+import re
 from dataclasses import dataclass
+
+TIER_1_RE = re.compile(r'\b(iit|nit|bits pilani|iiit|dtu|nsut|iim|xlri)\b', re.IGNORECASE)
+UNICORN_RE = re.compile(r'\b(flipkart|razorpay|cred|swiggy|zomato|ola|paytm|meesho|zepto|blinkit)\b', re.IGNORECASE)
 
 from . import jd_spec
 from .data import CandidateView, parse_date
@@ -82,16 +86,32 @@ def system_evidence(c: CandidateView) -> float:
     (JD: "if their career history shows they built a recommendation system at a
     product company, they're a fit").
     """
-    career_text = " ".join(str(j.get("description", "")) for j in c.career)
-    blob = f"{c.summary} {c.headline} {career_text}"
-    strong = _contains_any(blob, jd_spec.SYSTEM_EVIDENCE_TERMS)       # ranking/retrieval/recsys: the bullseye
-    support = _contains_any(blob, jd_spec.SUPPORTING_EVIDENCE_TERMS)  # production/ML/A-B: adjacent evidence
+    strong_total = 0.0
+    support_total = 0.0
+
+    # Base profile text (no decay for summary/headline)
+    base_blob = f"{c.summary} {c.headline}"
+    strong_total += _contains_any(base_blob, jd_spec.SYSTEM_EVIDENCE_TERMS)
+    support_total += _contains_any(base_blob, jd_spec.SUPPORTING_EVIDENCE_TERMS)
+
+    # Explicitly sort career history before time decay
+    sorted_roles = sorted(
+        c.career,
+        key=lambda r: (1 if r.get("is_current") else 0, str(r.get("start_date", ""))),
+        reverse=True
+    )
+
+    for index, role in enumerate(sorted_roles):
+        decay_factor = math.exp(-0.4 * index)
+        desc = str(role.get("description", ""))
+        strong_total += decay_factor * _contains_any(desc, jd_spec.SYSTEM_EVIDENCE_TERMS)
+        support_total += decay_factor * _contains_any(desc, jd_spec.SUPPORTING_EVIDENCE_TERMS)
 
     # Strong evidence dominates (saturating); supporting evidence can lift a
     # plain-language candidate but is capped well below a true system-builder.
-    strong_score = 1.0 - math.exp(-0.9 * strong)
-    support_score = 0.55 * (1.0 - math.exp(-0.6 * support))
-    return _clip01(max(strong_score, support_score) if strong else 0.7 * strong_score + support_score)
+    strong_score = 1.0 - math.exp(-0.9 * strong_total)
+    support_score = 0.55 * (1.0 - math.exp(-0.6 * support_total))
+    return _clip01(max(strong_score, support_score) if strong_total else 0.7 * strong_score + support_score)
 
 
 def must_have_skills(c: CandidateView) -> float:
@@ -103,12 +123,24 @@ def must_have_skills(c: CandidateView) -> float:
     an endorsement/duration trust factor so lazy keyword-listing doesn't pay off.
     """
     skill_blob = " ".join(str(s.get("name", "")) for s in c.skills).lower()
-    career_text = " ".join(str(j.get("description", "")) for j in c.career).lower()
-
     retr_skill = _contains_any(skill_blob, jd_spec.RETRIEVAL_TECH_TERMS)
     eval_skill = _contains_any(skill_blob, jd_spec.EVAL_FRAMEWORK_TERMS)
-    retr_work = _contains_any(career_text, jd_spec.RETRIEVAL_TECH_TERMS)
-    eval_work = _contains_any(career_text, jd_spec.EVAL_FRAMEWORK_TERMS)
+
+    retr_work_total = 0.0
+    eval_work_total = 0.0
+
+    # Explicitly sort career history before time decay
+    sorted_roles = sorted(
+        c.career,
+        key=lambda r: (1 if r.get("is_current") else 0, str(r.get("start_date", ""))),
+        reverse=True
+    )
+
+    for index, role in enumerate(sorted_roles):
+        decay_factor = math.exp(-0.4 * index)
+        desc = str(role.get("description", "")).lower()
+        retr_work_total += decay_factor * _contains_any(desc, jd_spec.RETRIEVAL_TECH_TERMS)
+        eval_work_total += decay_factor * _contains_any(desc, jd_spec.EVAL_FRAMEWORK_TERMS)
 
     # Trust factor on listed skills: average (endorsements>0 OR duration>=12mo)
     # over the retrieval/eval-relevant listed skills. A skill with 0 endorsements
@@ -118,13 +150,16 @@ def must_have_skills(c: CandidateView) -> float:
     for s in c.skills:
         name = str(s.get("name", "")).lower()
         if any(rt.strip() in name for rt in relevant_terms):
+            if s.get("is_inferred"):
+                trust_vals.append(0.20)
+                continue
             endorsed = (s.get("endorsements", 0) or 0) > 0
             seasoned = (s.get("duration_months", 0) or 0) >= 12
             trust_vals.append(1.0 if (endorsed or seasoned) else 0.35)
     trust = sum(trust_vals) / len(trust_vals) if trust_vals else 1.0
 
     listed = _clip01(1.0 - math.exp(-0.7 * (retr_skill + eval_skill))) * trust
-    demonstrated = _clip01(1.0 - math.exp(-0.9 * (retr_work + eval_work)))
+    demonstrated = _clip01(1.0 - math.exp(-0.9 * (retr_work_total + eval_work_total)))
     # Demonstrated-in-work is worth more than merely-listed.
     base = _clip01(0.45 * listed + 0.55 * demonstrated)
 
@@ -303,6 +338,31 @@ def behavioral_multiplier(c: CandidateView) -> tuple[float, dict]:
 # Bundled feature vector
 # --------------------------------------------------------------------------- #
 
+def premium_pedigree(c: CandidateView) -> float:
+    """
+    Indian Industry Context: Tier-1 / Unicorn Signal.
+    Deterministic local industry weightings. Looks for Tier-1 institutions
+    and premium Indian Unicorns in education and career history.
+    """
+    score = 0.0
+    # Check Education
+    for edu in c.education:
+        school = str(edu.get('school', '')).lower()
+        if TIER_1_RE.search(school):
+            score += 0.5
+            break
+            
+    # Check Career History for Unicorns
+    for role in c.career:
+        company = str(role.get('company', '')).lower()
+        if UNICORN_RE.search(company):
+            score += 0.5
+            if role.get('is_current', False):
+                score += 0.25
+            break
+            
+    return _clip01(score)
+
 FEATURE_NAMES = [
     "role_fit",
     "system_evidence",
@@ -310,6 +370,7 @@ FEATURE_NAMES = [
     "experience_fit",
     "bonus_skills",
     "location_fit",
+    "premium_pedigree",
 ]
 
 
@@ -340,6 +401,7 @@ def extract(c: CandidateView) -> FeatureBundle:
         "experience_fit": experience_fit(c),
         "bonus_skills": bonus_skills(c),
         "location_fit": location_fit(c),
+        "premium_pedigree": premium_pedigree(c),
     }
     mult, comp = behavioral_multiplier(c)
     return FeatureBundle(values=vals, behavioral_mult=mult, behavioral_components=comp)

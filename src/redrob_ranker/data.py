@@ -27,6 +27,17 @@ from typing import Iterator
 # while front-loading title/summary/recent roles (the JD-decisive content).
 DENSE_WORD_CAP = 256
 
+ROLE_FOUNDATIONAL_SKILLS = {
+    "data scientist": ["python", "sql", "machine learning", "pandas"],
+    "machine learning": ["python", "machine learning", "pytorch", "deep learning"],
+    "ai engineer": ["python", "machine learning", "deep learning", "llm", "nlp"],
+    "frontend engineer": ["javascript", "react", "html", "css", "typescript"],
+    "backend engineer": ["python", "java", "node.js", "sql", "aws", "api"],
+    "software engineer": ["python", "java", "sql", "git"],
+    "devops engineer": ["aws", "docker", "kubernetes", "cicd", "linux"],
+    "product manager": ["agile", "scrum", "roadmap", "product strategy"]
+}
+
 
 def _open_maybe_gzip(path: str | Path):
     path = Path(path)
@@ -119,6 +130,22 @@ def build_view(raw: dict) -> CandidateView:
     summary = str(_safe(p, "summary", ""))
     headline = str(_safe(p, "headline", ""))
     title = str(_safe(p, "current_title", ""))
+
+    # Cold-Start Mitigation: Authenticity Gatekeeper
+    total_exp = float(_safe(p, "years_of_experience", 0.0) or 0.0)
+    if total_exp > 0 or len(career) > 0:
+        existing_skills = {str(s.get("name", "")).lower() for s in skills}
+        title_lower = title.lower()
+        for role_key, baseline_skills in ROLE_FOUNDATIONAL_SKILLS.items():
+            if role_key in title_lower:
+                for skill in baseline_skills:
+                    if skill not in existing_skills:
+                        skills.append({
+                            "name": skill,
+                            "proficiency": "intermediate",
+                            "duration_months": 12,
+                            "is_inferred": True
+                        })
 
     # Dense text: human-readable, in the order a recruiter would read it. The
     # career descriptions carry the strongest "what did they actually build"

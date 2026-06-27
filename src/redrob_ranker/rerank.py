@@ -35,6 +35,7 @@ RERANK_FEATURES = [
     "system_evidence",
     "bonus_skills",
     "location_fit",
+    "premium_pedigree",
 ]
 
 # Weights follow the JD's OWN priority tiers (the defensible ordering), informed
@@ -56,10 +57,11 @@ RERANK_FEATURES = [
 # mild 0.7-1.0 modifier on top of competence. Validated against evaluate.py:
 # headline NDCG holds and the top-100 fills with senior systems-builders.
 RERANK_WEIGHTS = {
-    "system_evidence": 0.30,
-    "must_have_skills": 0.28,
-    "experience_fit": 0.18,
-    "location_fit": 0.16,
+    "system_evidence": 0.28,
+    "must_have_skills": 0.26,
+    "experience_fit": 0.16,
+    "premium_pedigree": 0.10,
+    "location_fit": 0.12,
     "bonus_skills": 0.08,
 }
 
